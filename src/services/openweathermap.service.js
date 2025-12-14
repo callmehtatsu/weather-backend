@@ -62,7 +62,8 @@ export async function reverseGeocode(lat, lon) {
         },
         headers: {
           'User-Agent': 'PleasantWeatherApp/1.0'
-        }
+        },
+        timeout: 10000
       });
 
       if (nominatimResponse.data && nominatimResponse.data.address) {

@@ -11,8 +11,26 @@ export async function getCurrentWeather(req, res) {
       console.log(`[WEATHER] geocoding city: ${city}`);
       const locations = await openweathermapService.searchLocation(city);
       
-      if (!Array.isArray(locations) || locations.length === 0 || locations.error) {
-        console.error(`[WEATHER] city not found: ${city}`);
+      console.log(`[WEATHER] geocoding result:`, JSON.stringify(locations, null, 2));
+      
+      if (!locations) {
+        console.error(`[WEATHER] geocoding returned null/undefined for: ${city}`);
+        return res.status(500).json({ error: 'loi khi geocoding', message: 'geocoding returned null' });
+      }
+      
+      if (locations.error) {
+        console.error(`[WEATHER] geocoding error for ${city}:`, locations.error);
+        if (locations.error.includes('rate limit') || locations.error.includes('429')) {
+          return res.status(429).json({ error: 'api rate limit exceeded', message: locations.error });
+        }
+        if (locations.error.includes('api key') || locations.error.includes('401')) {
+          return res.status(401).json({ error: 'api key invalid', message: locations.error });
+        }
+        return res.status(404).json({ error: 'khong tim thay dia diem', message: locations.error });
+      }
+      
+      if (!Array.isArray(locations) || locations.length === 0) {
+        console.error(`[WEATHER] city not found: ${city}, result:`, locations);
         return res.status(404).json({ error: 'khong tim thay dia diem' });
       }
       
@@ -29,10 +47,22 @@ export async function getCurrentWeather(req, res) {
     }
     
     console.log(`[WEATHER] Fetching weather for: ${lat}, ${lon}`);
+    
+    if (isNaN(parseFloat(lat)) || isNaN(parseFloat(lon))) {
+      console.error(`[WEATHER] Invalid coordinates: lat=${lat}, lon=${lon}`);
+      return res.status(400).json({ error: 'toa do khong hop le', lat, lon });
+    }
+    
     const weather = await openMeteoService.getCurrentWeather(
       parseFloat(lat), 
       parseFloat(lon)
     );
+    
+    if (!weather) {
+      console.error(`[WEATHER] Weather data is null/undefined for ${lat}, ${lon}`);
+      return res.status(500).json({ error: 'loi khi lay thoi tiet', message: 'weather data is null' });
+    }
+    
     console.log(`[WEATHER] Weather code received: ${weather.weatherCode}, condition: ${weather.condition}`);
     
     if (!city) {
@@ -59,7 +89,31 @@ export async function getCurrentWeather(req, res) {
     });
     
   } catch (error) {
-    console.error('current weather error:', error);
+    console.error('[WEATHER] Current weather error:', error);
+    console.error('[WEATHER] Error message:', error.message);
+    console.error('[WEATHER] Error stack:', error.stack);
+    
+    if (error.message?.includes('rate limit') || error.message?.includes('429')) {
+      return res.status(429).json({ 
+        error: 'api rate limit exceeded',
+        message: error.message 
+      });
+    }
+    
+    if (error.message?.includes('api key') || error.message?.includes('401') || error.message?.includes('authentication')) {
+      return res.status(401).json({ 
+        error: 'api key invalid',
+        message: error.message 
+      });
+    }
+    
+    if (error.message?.includes('timeout')) {
+      return res.status(504).json({ 
+        error: 'api timeout',
+        message: error.message 
+      });
+    }
+    
     res.status(500).json({ 
       error: 'loi khi lay thoi tiet hien tai',
       message: error.message 
@@ -73,7 +127,18 @@ export async function getForecast(req, res) {
     
     if (city && (!lat || !lon)) {
       const locations = await openweathermapService.searchLocation(city);
-      if (!Array.isArray(locations) || locations.length === 0 || locations.error) {
+      
+      if (locations?.error) {
+        if (locations.error.includes('rate limit') || locations.error.includes('429')) {
+          return res.status(429).json({ error: 'api rate limit exceeded', message: locations.error });
+        }
+        if (locations.error.includes('api key') || locations.error.includes('401')) {
+          return res.status(401).json({ error: 'api key invalid', message: locations.error });
+        }
+        return res.status(404).json({ error: 'khong tim thay dia diem', message: locations.error });
+      }
+      
+      if (!Array.isArray(locations) || locations.length === 0) {
         return res.status(404).json({ error: 'khong tim thay dia diem' });
       }
       lat = locations[0].lat;
@@ -102,8 +167,27 @@ export async function getForecast(req, res) {
     });
     
   } catch (error) {
-    console.error('forecast error:', error);
-    res.status(500).json({ error: 'loi khi lay du bao thoi tiet' });
+    console.error('[WEATHER] Forecast error:', error);
+    console.error('[WEATHER] Error message:', error.message);
+    
+    if (error.message?.includes('rate limit') || error.message?.includes('429')) {
+      return res.status(429).json({ 
+        error: 'api rate limit exceeded',
+        message: error.message 
+      });
+    }
+    
+    if (error.message?.includes('api key') || error.message?.includes('401')) {
+      return res.status(401).json({ 
+        error: 'api key invalid',
+        message: error.message 
+      });
+    }
+    
+    res.status(500).json({ 
+      error: 'loi khi lay du bao thoi tiet',
+      message: error.message 
+    });
   }
 }
 
@@ -113,7 +197,18 @@ export async function getHourlyForecast(req, res) {
     
     if (city && (!lat || !lon)) {
       const locations = await openweathermapService.searchLocation(city);
-      if (!Array.isArray(locations) || locations.length === 0 || locations.error) {
+      
+      if (locations?.error) {
+        if (locations.error.includes('rate limit') || locations.error.includes('429')) {
+          return res.status(429).json({ error: 'api rate limit exceeded', message: locations.error });
+        }
+        if (locations.error.includes('api key') || locations.error.includes('401')) {
+          return res.status(401).json({ error: 'api key invalid', message: locations.error });
+        }
+        return res.status(404).json({ error: 'khong tim thay dia diem', message: locations.error });
+      }
+      
+      if (!Array.isArray(locations) || locations.length === 0) {
         return res.status(404).json({ error: 'khong tim thay dia diem' });
       }
       lat = locations[0].lat;
@@ -138,7 +233,26 @@ export async function getHourlyForecast(req, res) {
     });
     
   } catch (error) {
-    console.error('hourly forecast error:', error);
-    res.status(500).json({ error: 'loi khi lay du bao theo gio' });
+    console.error('[WEATHER] Hourly forecast error:', error);
+    console.error('[WEATHER] Error message:', error.message);
+    
+    if (error.message?.includes('rate limit') || error.message?.includes('429')) {
+      return res.status(429).json({ 
+        error: 'api rate limit exceeded',
+        message: error.message 
+      });
+    }
+    
+    if (error.message?.includes('api key') || error.message?.includes('401')) {
+      return res.status(401).json({ 
+        error: 'api key invalid',
+        message: error.message 
+      });
+    }
+    
+    res.status(500).json({ 
+      error: 'loi khi lay du bao theo gio',
+      message: error.message 
+    });
   }
 }

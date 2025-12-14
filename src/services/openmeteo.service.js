@@ -48,6 +48,10 @@ export async function getCurrentWeather(lat, lon) {
       timeout: 15000
     });
 
+    if (!response || !response.data) {
+      throw new Error('Invalid response from Open-Meteo API');
+    }
+
     const current = response.data.current;
     
     if (!current) {
@@ -89,11 +93,36 @@ export async function getCurrentWeather(lat, lon) {
     };
   } catch (error) {
     console.error(`[OPEN-METEO] Error for lat: ${lat}, lon: ${lon}:`, error.message);
+    
     if (error.response) {
-      console.error(`[OPEN-METEO] Response status: ${error.response.status}`);
-      console.error(`[OPEN-METEO] Response data:`, error.response.data);
+      const status = error.response.status;
+      const data = error.response.data;
+      
+      console.error(`[OPEN-METEO] Response status: ${status}`);
+      console.error(`[OPEN-METEO] Response data:`, JSON.stringify(data, null, 2));
+      
+      if (status === 429) {
+        throw new Error(`Open-Meteo rate limit exceeded: ${data?.reason || 'Too many requests'}`);
+      }
+      if (status === 401) {
+        throw new Error(`Open-Meteo authentication failed: ${data?.error || 'Invalid credentials'}`);
+      }
+      if (status >= 500) {
+        throw new Error(`Open-Meteo server error (${status}): ${data?.error || error.message}`);
+      }
+      
+      throw new Error(`Open-Meteo API error (${status}): ${data?.error || error.message}`);
     }
-    throw new Error('Lỗi khi lấy dữ liệu thời tiết');
+    
+    if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+      throw new Error(`Open-Meteo timeout: ${error.message}`);
+    }
+    
+    if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+      throw new Error(`Open-Meteo network error: ${error.message}`);
+    }
+    
+    throw new Error(`Open-Meteo error: ${error.message}`);
   }
 }
 
@@ -121,6 +150,10 @@ export async function getWeatherForecast(lat, lon, days = 7) {
       },
       timeout: 15000
     });
+
+    if (!response || !response.data || !response.data.daily) {
+      throw new Error('Invalid forecast response from Open-Meteo API');
+    }
 
     const daily = response.data.daily;
     
@@ -156,8 +189,32 @@ export async function getWeatherForecast(lat, lon, days = 7) {
 
     return forecast;
   } catch (error) {
-    console.error('Open-Meteo Forecast Error:', error.message);
-    throw new Error('Lỗi khi lấy dự báo thời tiết');
+    console.error('[OPEN-METEO] Forecast Error:', error.message);
+    
+    if (error.response) {
+      const status = error.response.status;
+      const data = error.response.data;
+      console.error(`[OPEN-METEO] Response status: ${status}`);
+      console.error(`[OPEN-METEO] Response data:`, JSON.stringify(data, null, 2));
+      
+      if (status === 429) {
+        throw new Error(`Open-Meteo rate limit exceeded: ${data?.reason || 'Too many requests'}`);
+      }
+      if (status === 401) {
+        throw new Error(`Open-Meteo authentication failed: ${data?.error || 'Invalid credentials'}`);
+      }
+      if (status >= 500) {
+        throw new Error(`Open-Meteo server error (${status}): ${data?.error || error.message}`);
+      }
+      
+      throw new Error(`Open-Meteo forecast error (${status}): ${data?.error || error.message}`);
+    }
+    
+    if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+      throw new Error(`Open-Meteo forecast timeout: ${error.message}`);
+    }
+    
+    throw new Error(`Open-Meteo forecast error: ${error.message}`);
   }
 }
 
@@ -207,6 +264,10 @@ export async function getHourlyForecast(lat, lon, hours = 24) {
       params,
       timeout: 15000
     });
+
+    if (!response || !response.data || !response.data.hourly) {
+      throw new Error('Invalid hourly forecast response from Open-Meteo API');
+    }
 
     const hourly = response.data.hourly;
     
@@ -293,11 +354,31 @@ export async function getHourlyForecast(lat, lon, hours = 24) {
     return forecast;
   } catch (error) {
     console.error('[OPEN-METEO] Hourly Forecast Error:', error.message);
+    
     if (error.response) {
-      console.error('[OPEN-METEO] Response status:', error.response.status);
-      console.error('[OPEN-METEO] Response data:', error.response.data);
+      const status = error.response.status;
+      const data = error.response.data;
+      console.error('[OPEN-METEO] Response status:', status);
+      console.error('[OPEN-METEO] Response data:', JSON.stringify(data, null, 2));
+      
+      if (status === 429) {
+        throw new Error(`Open-Meteo rate limit exceeded: ${data?.reason || 'Too many requests'}`);
+      }
+      if (status === 401) {
+        throw new Error(`Open-Meteo authentication failed: ${data?.error || 'Invalid credentials'}`);
+      }
+      if (status >= 500) {
+        throw new Error(`Open-Meteo server error (${status}): ${data?.error || error.message}`);
+      }
+      
+      throw new Error(`Open-Meteo hourly forecast error (${status}): ${data?.error || error.message}`);
     }
-    throw new Error('Lỗi khi lấy dự báo theo giờ');
+    
+    if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+      throw new Error(`Open-Meteo hourly forecast timeout: ${error.message}`);
+    }
+    
+    throw new Error(`Open-Meteo hourly forecast error: ${error.message}`);
   }
 }
 
