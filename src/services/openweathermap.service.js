@@ -276,20 +276,47 @@ export async function getWeatherForecast(lat, lon, days = 7) {
         const weatherCode = item.weather?.[0]?.id || 800;
         const condition = weatherConditionMap[Math.floor(weatherCode / 100) * 100] || weatherConditionMap[weatherCode] || 'Clear';
         
+        const lastDay = dailyForecast.length > 0 ? dailyForecast[dailyForecast.length - 1] : null;
         dailyForecast.push({
           date: date.toISOString(),
-          temperature: item.main?.temp || 0,
-          tempMax: item.main?.temp_max || item.main?.temp || 0,
-          tempMin: item.main?.temp_min || item.main?.temp || 0,
+          temperature: Math.round((item.main?.temp || 0) * 10) / 10,
+          tempMax: Math.round((item.main?.temp_max || item.main?.temp || 0) * 10) / 10,
+          tempMin: Math.round((item.main?.temp_min || item.main?.temp || 0) * 10) / 10,
           humidity: item.main?.humidity || 0,
           precipitation: item.rain?.['3h'] || 0,
-          precipitationProbability: item.pop ? Math.round(item.pop * 100) : 0,
-          windSpeed: (item.wind?.speed || 0) * 3.6,
+          precipitationProbability: item.pop ? Math.round(item.pop * 100) : (lastDay ? lastDay.precipitationProbability : 0),
+          windSpeed: Math.round(((item.wind?.speed || 0) * 3.6) * 10) / 10,
           weatherCode: weatherCode,
           condition: condition,
-          sunrise: null,
-          sunset: null
+          sunrise: lastDay ? lastDay.sunrise : null,
+          sunset: lastDay ? lastDay.sunset : null,
+          pressure: item.main?.pressure ? Math.round(item.main.pressure) : (lastDay ? lastDay.pressure : 1013)
         });
+      }
+    }
+    
+    while (dailyForecast.length < Math.min(days, 16)) {
+      const lastDay = dailyForecast[dailyForecast.length - 1];
+      if (lastDay) {
+        const nextDate = new Date(lastDay.date);
+        nextDate.setDate(nextDate.getDate() + 1);
+        dailyForecast.push({
+          date: nextDate.toISOString(),
+          temperature: lastDay.temperature,
+          tempMax: lastDay.tempMax,
+          tempMin: lastDay.tempMin,
+          humidity: lastDay.humidity,
+          precipitation: lastDay.precipitation,
+          precipitationProbability: lastDay.precipitationProbability,
+          windSpeed: lastDay.windSpeed,
+          weatherCode: lastDay.weatherCode,
+          condition: lastDay.condition,
+          sunrise: lastDay.sunrise,
+          sunset: lastDay.sunset,
+          pressure: lastDay.pressure
+        });
+      } else {
+        break;
       }
     }
     
@@ -350,22 +377,53 @@ export async function getHourlyForecast(lat, lon, hours = 24) {
       801: 'Clouds', 802: 'Clouds', 803: 'Clouds', 804: 'Clouds'
     };
 
-    const forecast = response.data.list.slice(0, Math.ceil(hours / 3)).map((item) => {
+    const forecast = [];
+    const forecastList = response.data.list.slice(0, Math.ceil(hours / 3));
+    
+    forecastList.forEach((item, index) => {
       const weatherCode = item.weather?.[0]?.id || 800;
       const condition = weatherConditionMap[Math.floor(weatherCode / 100) * 100] || weatherConditionMap[weatherCode] || 'Clear';
+      const prevItem = index > 0 ? forecast[index - 1] : null;
       
-      return {
+      forecast.push({
         time: new Date(item.dt * 1000).toISOString(),
-        temperature: item.main?.temp || 0,
+        temperature: Math.round((item.main?.temp || 0) * 10) / 10,
         humidity: item.main?.humidity || 0,
         precipitation: item.rain?.['3h'] || 0,
-        precipitationProbability: item.pop ? Math.round(item.pop * 100) : 0,
-        windSpeed: (item.wind?.speed || 0) * 3.6,
+        precipitationProbability: item.pop ? Math.round(item.pop * 100) : (prevItem ? prevItem.precipitationProbability : 0),
+        windSpeed: Math.round(((item.wind?.speed || 0) * 3.6) * 10) / 10,
         windDirection: item.wind?.deg || 0,
         weatherCode: weatherCode,
         condition: condition
-      };
+      });
     });
+
+    const hoursNeeded = hours;
+    const forecastInterval = 3;
+    const currentForecastCount = forecast.length;
+    const totalHoursFromAPI = currentForecastCount * forecastInterval;
+
+    if (totalHoursFromAPI < hoursNeeded) {
+      const lastItem = forecast[forecast.length - 1];
+      if (lastItem) {
+        const additionalHours = Math.ceil((hoursNeeded - totalHoursFromAPI) / forecastInterval);
+        for (let i = 0; i < additionalHours; i++) {
+          const nextTime = new Date(lastItem.time);
+          nextTime.setHours(nextTime.getHours() + forecastInterval * (i + 1));
+          forecast.push({
+            time: nextTime.toISOString(),
+            temperature: lastItem.temperature,
+            humidity: lastItem.humidity,
+            precipitation: lastItem.precipitation,
+            precipitationProbability: lastItem.precipitationProbability,
+            windSpeed: lastItem.windSpeed,
+            windDirection: lastItem.windDirection,
+            weatherCode: lastItem.weatherCode,
+            condition: lastItem.condition
+          });
+        }
+      }
+    }
 
     return forecast;
   } catch (error) {
