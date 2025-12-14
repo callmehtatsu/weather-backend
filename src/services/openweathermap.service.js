@@ -19,7 +19,8 @@ export async function searchLocation(query) {
         q: query,
         limit: 5,
         appid: OPENWEATHER_API_KEY
-      }
+      },
+      timeout: 10000
     });
 
     if (!response.data || response.data.length === 0) {
@@ -124,7 +125,8 @@ export async function reverseGeocode(lat, lon) {
         lon: lon,
         limit: 1,
         appid: OPENWEATHER_API_KEY
-      }
+      },
+      timeout: 10000
     });
 
     if (!response.data || response.data.length === 0) {

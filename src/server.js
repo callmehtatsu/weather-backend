@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
+import axios from 'axios';
 
 import weatherRoutes from './routes/weather.routes.js';
 import mapRoutes from './routes/map.routes.js';
@@ -116,6 +117,143 @@ app.get('/api/ratelimit', (req, res) => {
   });
 });
 
+app.get('/api/check', async (req, res) => {
+  const checks = {
+    timestamp: new Date().toISOString(),
+    env: {
+      OPENWEATHER_API_KEY: process.env.OPENWEATHER_API_KEY ? 'SET' : 'MISSING',
+      FRONTEND_URL: process.env.FRONTEND_URL || 'NOT SET',
+      PORT: process.env.PORT || '5000 (default)',
+      NODE_ENV: process.env.NODE_ENV || 'NOT SET'
+    },
+    services: {}
+  };
+
+  const startTime = Date.now();
+  try {
+    const response = await axios.get('https://api.open-meteo.com/v1/forecast', {
+      params: {
+        latitude: 21.0285,
+        longitude: 105.8542,
+        current: 'temperature_2m',
+        timezone: 'Asia/Bangkok'
+      },
+      timeout: 5000
+    });
+    const responseTime = Date.now() - startTime;
+    checks.services.openMeteo = {
+      status: 'OK',
+      responseTime: `${responseTime}ms`,
+      hasData: !!response.data?.current,
+      statusCode: response.status
+    };
+  } catch (error) {
+    const responseTime = Date.now() - startTime;
+    checks.services.openMeteo = {
+      status: 'ERROR',
+      error: error.message,
+      code: error.code,
+      responseStatus: error.response?.status,
+      responseTime: `${responseTime}ms`
+    };
+  }
+
+  const geocodeStartTime = Date.now();
+  try {
+    const apiKey = process.env.OPENWEATHER_API_KEY;
+    if (!apiKey) {
+      checks.services.openWeatherGeocoding = {
+        status: 'SKIP',
+        error: 'OPENWEATHER_API_KEY not set'
+      };
+    } else {
+      const response = await axios.get('https://api.openweathermap.org/geo/1.0/direct', {
+        params: {
+          q: 'Hanoi',
+          limit: 1,
+          appid: apiKey
+        },
+        timeout: 5000
+      });
+      const responseTime = Date.now() - geocodeStartTime;
+      checks.services.openWeatherGeocoding = {
+        status: 'OK',
+        found: response.data?.length > 0,
+        responseStatus: response.status,
+        responseTime: `${responseTime}ms`
+      };
+    }
+  } catch (error) {
+    const responseTime = Date.now() - geocodeStartTime;
+    checks.services.openWeatherGeocoding = {
+      status: 'ERROR',
+      error: error.message,
+      code: error.code,
+      responseStatus: error.response?.status,
+      responseData: error.response?.data,
+      responseTime: `${responseTime}ms`
+    };
+  }
+
+  const reverseStartTime = Date.now();
+  try {
+    const apiKey = process.env.OPENWEATHER_API_KEY;
+    if (!apiKey) {
+      checks.services.openWeatherReverse = {
+        status: 'SKIP',
+        error: 'OPENWEATHER_API_KEY not set'
+      };
+    } else {
+      const response = await axios.get('https://api.openweathermap.org/geo/1.0/reverse', {
+        params: {
+          lat: 21.0285,
+          lon: 105.8542,
+          limit: 1,
+          appid: apiKey
+        },
+        timeout: 5000
+      });
+      const responseTime = Date.now() - reverseStartTime;
+      checks.services.openWeatherReverse = {
+        status: 'OK',
+        found: response.data?.length > 0,
+        responseStatus: response.status,
+        responseTime: `${responseTime}ms`
+      };
+    }
+  } catch (error) {
+    const responseTime = Date.now() - reverseStartTime;
+    checks.services.openWeatherReverse = {
+      status: 'ERROR',
+      error: error.message,
+      code: error.code,
+      responseStatus: error.response?.status,
+      responseData: error.response?.data,
+      responseTime: `${responseTime}ms`
+    };
+  }
+
+  res.json(checks);
+});
+
+app.get('/api/debug', (req, res) => {
+  res.json({
+    env: {
+      OPENWEATHER_API_KEY: process.env.OPENWEATHER_API_KEY ? `${process.env.OPENWEATHER_API_KEY.substring(0, 8)}...` : 'NOT SET',
+      FRONTEND_URL: process.env.FRONTEND_URL || 'NOT SET',
+      PORT: process.env.PORT || '5000 (default)',
+      NODE_ENV: process.env.NODE_ENV || 'NOT SET',
+      OPEN_METEO_BASE_URL: process.env.OPEN_METEO_BASE_URL || 'https://api.open-meteo.com/v1 (default)'
+    },
+    server: {
+      uptime: process.uptime(),
+      memory: process.memoryUsage(),
+      nodeVersion: process.version
+    },
+    timestamp: new Date().toISOString()
+  });
+});
+
 app.use('/api/weather', weatherRoutes);
 app.use('/api/map', mapRoutes);
 
@@ -141,6 +279,8 @@ app.listen(PORT, () => {
   console.log(`📍 Server:     http://localhost:${PORT}`);
   console.log(`🏥 Health:     http://localhost:${PORT}/health`);
   console.log(`🧪 Test:       http://localhost:${PORT}/api/test`);
+  console.log(`🔍 Check APIs: http://localhost:${PORT}/api/check`);
+  console.log(`🐛 Debug:      http://localhost:${PORT}/api/debug`);
   console.log(`🌤️  Weather:    Open-Meteo (FREE)`);
   console.log(`🗺️  Geocoding:  Mapbox`);
   console.log(`🌍 Env:        ${process.env.NODE_ENV}`);

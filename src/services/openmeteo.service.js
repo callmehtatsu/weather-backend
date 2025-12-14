@@ -43,7 +43,10 @@ export async function getCurrentWeather(lat, lon) {
     
     console.log(`[OPEN-METEO] Request params:`, params);
     
-    const response = await axios.get(url, { params });
+    const response = await axios.get(url, { 
+      params,
+      timeout: 15000
+    });
 
     const current = response.data.current;
     
@@ -115,7 +118,8 @@ export async function getWeatherForecast(lat, lon, days = 7) {
         ].join(','),
         forecast_days: days,
         timezone: 'Asia/Bangkok'
-      }
+      },
+      timeout: 15000
     });
 
     const daily = response.data.daily;
@@ -199,7 +203,10 @@ export async function getHourlyForecast(lat, lon, hours = 24) {
     
     console.log(`[OPEN-METEO] Request params:`, params);
     
-    const response = await axios.get(url, { params });
+    const response = await axios.get(url, { 
+      params,
+      timeout: 15000
+    });
 
     const hourly = response.data.hourly;
     
